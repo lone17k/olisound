@@ -30,5 +30,3 @@ files {
     "html/index.html",
     "html/scripts/engine.js",
 }
-
-provides { 'xsound' }
