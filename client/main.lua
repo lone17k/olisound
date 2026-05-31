@@ -3,8 +3,22 @@ isPlayerCloseToMusic = false
 disableMusic = false
 
 function UpdatePlayerPositionInNUI()
-    local pos = GetEntityCoords(PlayerPedId())
-    SendNUIMessage({ status = "position", x = pos.x, y = pos.y, z = pos.z })
+    local ped = PlayerPedId()
+    local pos = GetEntityCoords(ped)
+    local camRot = GetGameplayCamRot(2)
+    local z = math.rad(camRot.z)
+    local x = math.rad(camRot.x)
+    local num = math.abs(math.cos(x))
+    
+    local fx = -math.sin(z) * num
+    local fy = math.cos(z) * num
+    local fz = math.sin(x)
+    
+    SendNUIMessage({ 
+        status = "position", 
+        x = pos.x, y = pos.y, z = pos.z,
+        fx = fx, fy = fy, fz = fz
+    })
 end
 
 function CheckForCloseMusic()
@@ -111,8 +125,13 @@ CreateThread(function()
     end
 end)
 
-RegisterCommand("streamermode", function()
-    disableMusic = not disableMusic
+local function ToggleStreamerMode(state)
+    if state ~= nil then
+        disableMusic = state
+    else
+        disableMusic = not disableMusic
+    end
+
     if disableMusic then
         for k, _ in pairs(soundInfo) do
             SendNUIMessage({ status = "delete", name = k })
@@ -122,4 +141,18 @@ RegisterCommand("streamermode", function()
     else
         TriggerEvent("chat:addMessage", { args = { "olisound", Config.Messages["streamer_off"] } })
     end
-end, false)
+end
+
+if Config.StreamerModeCommand and Config.StreamerModeCommand ~= "" then
+    RegisterCommand(Config.StreamerModeCommand, function()
+        ToggleStreamerMode()
+    end, false)
+end
+
+-- Backwards compatibility with xSound
+exports('streamerMode', ToggleStreamerMode)
+
+RegisterNetEvent('xsound:streamerMode')
+AddEventHandler('xsound:streamerMode', function(status)
+    ToggleStreamerMode(status)
+end)

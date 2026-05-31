@@ -58,24 +58,19 @@ CreateThread(function()
             if isInVehicle and currentVehicle and info.vehicleEntity then
                 if isSameVehicle(info.vehicleEntity, currentVehicle) then
                     SendNUIMessage({ status = "muffle", name = name, enabled = false })
-                    SendNUIMessage({ status = "vehicleGain", name = name, gain = 1.0 })
+                    SendNUIMessage({ status = "vehicleGain", name = name, gain = Config.insideVehicleVolume or 1.0 })
+                    SendNUIMessage({ status = "disablePanning", name = name, disabled = true })
                 else
                     SendNUIMessage({ status = "muffle", name = name, enabled = true, frequency = Config.occlusionFilterFrequency })
-                    SendNUIMessage({ status = "vehicleGain", name = name, gain = 0.4 })
+                    SendNUIMessage({ status = "vehicleGain", name = name, gain = Config.otherVehicleVolume or 0.4 })
+                    SendNUIMessage({ status = "disablePanning", name = name, disabled = false })
                 end
             elseif not isInVehicle then
-                local vehicleOpen = false
-                if info.vehicleEntity and DoesEntityExist(info.vehicleEntity) then
-                    vehicleOpen = isDoorOpen(info.vehicleEntity) or isWindowBroken(info.vehicleEntity)
-                end
-
-                if vehicleOpen then
-                    SendNUIMessage({ status = "muffle", name = name, enabled = false })
-                    SendNUIMessage({ status = "vehicleGain", name = name, gain = 1.0 })
-                else
-                    SendNUIMessage({ status = "muffle", name = name, enabled = true, frequency = Config.outsideVehicleMuffleFrequency })
-                    SendNUIMessage({ status = "vehicleGain", name = name, gain = 0.5 })
-                end
+                -- Always muffle when outside to ensure consistency and prevent "missing muffle" bugs 
+                -- caused by windows rolling down or doors left slightly ajar.
+                SendNUIMessage({ status = "muffle", name = name, enabled = true, frequency = Config.outsideVehicleMuffleFrequency })
+                SendNUIMessage({ status = "vehicleGain", name = name, gain = Config.outsideVehicleVolume or 0.5 })
+                SendNUIMessage({ status = "disablePanning", name = name, disabled = false })
             end
 
             ::continue::

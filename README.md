@@ -175,13 +175,15 @@ exports['olisound']:onPlayResume(name, function(info) end)
 
 ### How it works
 
-| Listener Position | Doors & Windows | Audio |
-| --- | --- | --- |
-| Inside the same vehicle | Any state | **Full clear audio** |
-| Outside the vehicle | All closed | **Muffled** (low-pass filtered) |
-| Outside the vehicle | Any door open | **Clear audio** |
-| Outside the vehicle | Any window broken | **Clear audio** |
-| Inside a different vehicle | All closed | **Double muffled** |
+### How it works
+
+| Listener Position | Doors & Windows | Audio | Directional Panning |
+| --- | --- | --- | --- |
+| Inside the same vehicle | Any state | **Clear (100% volume)** | Disabled (Centered Stereo) |
+| Outside the vehicle | Any state | **Muffled (50% volume)** | Enabled (True 3D Audio) |
+| Inside a different vehicle | Any state | **Double muffled (40% volume)**| Enabled (True 3D Audio) |
+
+> Note: Directional panning is disabled when inside the vehicle to prevent intense left-right panning while driving and moving the camera. Muffling is strictly enforced when outside a vehicle to prevent glitches with broken/ajar doors.
 
 ### Usage
 
@@ -201,7 +203,12 @@ exports['olisound']:Distance('car_radio', 25)
 ```lua
 Config.vehicleOcclusionEnabled = true
 Config.occlusionFilterFrequency = 800       -- muffle for sounds heard from inside car
-Config.outsideVehicleMuffleFrequency = 1200 -- muffle for car sounds heard from outside
+Config.outsideVehicleMuffleFrequency = 600  -- muffle for car sounds heard from outside
+
+-- Volume Modifiers (1.0 = 100%, 0.5 = 50%)
+Config.insideVehicleVolume = 1.0     -- Volume when you are inside the vehicle playing the music
+Config.otherVehicleVolume = 0.4      -- Volume of other vehicles' music when you are also inside a vehicle
+Config.outsideVehicleVolume = 0.5    -- Volume of vehicle music when you are on foot outside
 
 ```
 
@@ -237,7 +244,9 @@ exports['olisound']:setMuffled('sound', true, 600)
 
 | Command | Description |
 | --- | --- |
-| `/streamermode` | Toggle streamer mode (mutes all external audio) |
+| `/[streamermode]` | Toggle streamer mode (mutes all external audio). Configurable in `config.lua` |
+
+*Note: If `xsound` streamer mode is activated via export or event, `olisound` will automatically sync and mute its audio as well.*
 
 ---
 

@@ -52,6 +52,7 @@ class SoundInstance {
         this.muffled = false;
         this.attachedToVehicle = false;
         this.vehicleGainMultiplier = 1.0;
+        this.disablePanning = false;
 
         this.isYoutube = false;
         this.ytPlayer = null;
@@ -72,12 +73,20 @@ class SoundInstance {
 
         this.distortionNode = this.ctx.createWaveShaper();
         this.distortionNode.oversample = '4x';
+        
+        this.pannerNode = this.ctx.createPanner();
+        this.pannerNode.panningModel = 'HRTF';
+        this.pannerNode.distanceModel = 'linear';
+        this.pannerNode.refDistance = 100000;
+        this.pannerNode.maxDistance = 100000;
+        this.pannerNode.rolloffFactor = 0;
 
         this.gainNode = this.ctx.createGain();
         this.gainNode.gain.value = this.dynamic ? 0 : this.volume;
 
         this.filterNode.connect(this.distortionNode);
-        this.distortionNode.connect(this.gainNode);
+        this.distortionNode.connect(this.pannerNode);
+        this.pannerNode.connect(this.gainNode);
         this.gainNode.connect(this.ctx.destination);
 
         this.audio = null;
@@ -97,6 +106,7 @@ class SoundInstance {
             this.isYoutube = false;
             this._createAudio();
         }
+        this.setPosition(this.position[0], this.position[1], this.position[2]);
     }
 
     _createAudio() {
@@ -273,6 +283,7 @@ class SoundInstance {
         try { this.sourceNode?.disconnect(); } catch (e) {}
         try { this.filterNode?.disconnect(); } catch (e) {}
         try { this.distortionNode?.disconnect(); } catch (e) {}
+        try { this.pannerNode?.disconnect(); } catch (e) {}
         try { this.gainNode?.disconnect(); } catch (e) {}
         this.audio = null;
         this.sourceNode = null;
@@ -315,7 +326,32 @@ class SoundInstance {
 
     // ── Position / Distance ──
 
-    setPosition(x, y, z) { this.position = [x, y, z]; }
+    setPosition(x, y, z) { 
+        this.position = [x, y, z];
+        this._updatePanner();
+    }
+    
+    _updatePanner() {
+        if (!this.pannerNode) return;
+        let px = this.position[0];
+        let py = this.position[1];
+        let pz = this.position[2];
+        
+        if (this.disablePanning) {
+            px = soundManager.playerPos[0];
+            py = soundManager.playerPos[1];
+            pz = soundManager.playerPos[2];
+        }
+        
+        try {
+            this.pannerNode.positionX.setTargetAtTime(px, this.ctx.currentTime, 0.1);
+            this.pannerNode.positionY.setTargetAtTime(pz, this.ctx.currentTime, 0.1);
+            this.pannerNode.positionZ.setTargetAtTime(-py, this.ctx.currentTime, 0.1);
+        } catch (e) {
+            this.pannerNode.setPosition(px, pz, -py);
+        }
+    }
+    
     setDistance(dist) { this.distance = dist; }
 
     setDynamic(val) {
@@ -456,6 +492,25 @@ class SoundInstance {
         }
     }
 
+    // ── Effects: Panning Toggle ──
+    
+    setDisablePanning(disabled) {
+        if (this.disablePanning !== disabled) {
+            this.disablePanning = disabled;
+            
+            try { this.distortionNode.disconnect(); } catch (e) {}
+            
+            if (disabled) {
+                // Bypass panner entirely for perfect centered stereo
+                this.distortionNode.connect(this.gainNode);
+            } else {
+                // Route through panner for 3D spatialization
+                this.distortionNode.connect(this.pannerNode);
+                this._updatePanner();
+            }
+        }
+    }
+
     // ── Effects: Distortion ──
 
     setDistortion(amount) {
@@ -533,13 +588,47 @@ const soundManager = {
         if (s) { s.destroy(); delete this.sounds[name]; }
     },
 
-    setPlayerPosition(x, y, z) { this.playerPos = [x, y, z]; },
+    setPlayerPosition(x, y, z, fx, fy, fz) { 
+        this.playerPos = [x, y, z]; 
+        const ctx = getAudioContext();
+        if (ctx && ctx.listener) {
+            try {
+                ctx.listener.positionX.setTargetAtTime(x, ctx.currentTime, 0.1);
+                ctx.listener.positionY.setTargetAtTime(z, ctx.currentTime, 0.1);
+                ctx.listener.positionZ.setTargetAtTime(-y, ctx.currentTime, 0.1);
+
+                if (fx !== undefined && fy !== undefined && fz !== undefined) {
+                    ctx.listener.forwardX.setTargetAtTime(fx, ctx.currentTime, 0.1);
+                    ctx.listener.forwardY.setTargetAtTime(fz, ctx.currentTime, 0.1);
+                    ctx.listener.forwardZ.setTargetAtTime(-fy, ctx.currentTime, 0.1);
+                    
+                    ctx.listener.upX.setTargetAtTime(0, ctx.currentTime, 0.1);
+                    ctx.listener.upY.setTargetAtTime(1, ctx.currentTime, 0.1);
+                    ctx.listener.upZ.setTargetAtTime(0, ctx.currentTime, 0.1);
+                }
+            } catch (e) {
+                ctx.listener.setPosition(x, z, -y);
+                if (fx !== undefined && fy !== undefined && fz !== undefined) {
+                    ctx.listener.setOrientation(fx, fz, -fy, 0, 1, 0);
+                }
+            }
+        }
+        
+        // Update any sounds that have panning disabled so they track the player directly
+        for (const n in this.sounds) {
+            if (this.sounds[n] && this.sounds[n].disablePanning) {
+                this.sounds[n]._updatePanner();
+            }
+        }
+    },
 
     updateDynamicVolumes() {
         if (this.isAllMuted) return;
         for (const n in this.sounds) {
             const s = this.sounds[n];
-            if (s && s.dynamic && !s.destroyed && s.loaded) s.updateVolumeByDistance(this.playerPos);
+            if (s && s.dynamic && !s.destroyed && s.loaded) {
+                s.updateVolumeByDistance(this.playerPos);
+            }
         }
     },
 
@@ -584,7 +673,7 @@ window.addEventListener('message', function (event) {
             break;
 
         case 'position':
-            soundManager.setPlayerPosition(d.x, d.y, d.z);
+            soundManager.setPlayerPosition(d.x, d.y, d.z, d.fx, d.fy, d.fz);
             break;
 
         case 'url':
@@ -681,6 +770,11 @@ window.addEventListener('message', function (event) {
         case 'vehicleGain':
             s = soundManager.get(d.name);
             if (s) { s.setVehicleGain(d.gain); s.updateVolumeByDistance(soundManager.playerPos); }
+            break;
+            
+        case 'disablePanning':
+            s = soundManager.get(d.name);
+            if (s) s.setDisablePanning(d.disabled);
             break;
 
         case 'distortion':
