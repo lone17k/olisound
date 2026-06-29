@@ -4,7 +4,7 @@ function getDefaultInfo()
         url = "",
         id = "",
         position = nil,
-        distance = 10,
+        distance = Config.defaultDistance or 10,
         playing = false,
         paused = false,
         loop = false,
@@ -14,6 +14,7 @@ function getDefaultInfo()
         destroyOnFinish = true,
         attachedToVehicle = false,
         vehicleEntity = nil,
+        attachedEntity = nil,
     }
 end
 
@@ -128,6 +129,47 @@ function PlayUrlVehicle(name_, url_, volume_, vehicle, loop_, options)
     SendNUIMessage({ status = "attachVehicle", name = name_, attached = true })
 end
 exports('PlayUrlVehicle', PlayUrlVehicle)
+
+function PlayUrlEntity(name_, url_, volume_, entity, loop_, options)
+    if disableMusic then return end
+    if not DoesEntityExist(entity) then return end
+
+    local pos = GetEntityCoords(entity)
+
+    if soundInfo[name_] == nil then soundInfo[name_] = getDefaultInfo() end
+
+    soundInfo[name_].volume = volume_
+    soundInfo[name_].url = url_
+    soundInfo[name_].position = pos
+    soundInfo[name_].id = name_
+    soundInfo[name_].playing = true
+    soundInfo[name_].loop = loop_ or false
+    soundInfo[name_].isDynamic = true
+    soundInfo[name_].hasMaxTime = false
+    soundInfo[name_].destroyOnFinish = not (loop_ or false)
+    soundInfo[name_].attachedEntity = entity
+
+    globalOptionsCache[name_] = options or {}
+
+    CheckForCloseMusic()
+
+    if #(GetEntityCoords(PlayerPedId()) - pos) < soundInfo[name_].distance + Config.distanceBeforeUpdatingPos then
+        UpdatePlayerPositionInNUI()
+        SendNUIMessage({ status = "unmuteAll" })
+    end
+
+    SendNUIMessage({
+        status = "url",
+        name = name_,
+        url = url_,
+        x = pos.x, y = pos.y, z = pos.z,
+        dynamic = true,
+        hasMaxTime = false,
+        volume = volume_,
+        loop = loop_ or false,
+    })
+end
+exports('PlayUrlEntity', PlayUrlEntity)
 
 function PlayUrlPosSilent(name_, url_, volume_, pos, loop_)
     if disableMusic then return end

@@ -86,6 +86,10 @@ CreateThread(function()
                 local pos = GetEntityCoords(info.vehicleEntity)
                 info.position = pos
                 SendNUIMessage({ status = "soundPosition", name = name, x = pos.x, y = pos.y, z = pos.z })
+            elseif info.attachedEntity and DoesEntityExist(info.attachedEntity) and info.playing then
+                local pos = GetEntityCoords(info.attachedEntity)
+                info.position = pos
+                SendNUIMessage({ status = "soundPosition", name = name, x = pos.x, y = pos.y, z = pos.z })
             end
         end
     end

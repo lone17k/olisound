@@ -51,6 +51,22 @@ RegisterNUICallback("events", function(data, cb)
     if t == "onLoading" and globalOptionsCache[id] and globalOptionsCache[id].onLoading then
         globalOptionsCache[id].onLoading(getInfo(id))
     end
+    
+    if t == "onError" and globalOptionsCache[id] and globalOptionsCache[id].onError then
+        globalOptionsCache[id].onError(getInfo(id))
+    end
+
+    if t == "onPause" and globalOptionsCache[id] and globalOptionsCache[id].onPlayPause then
+        globalOptionsCache[id].onPlayPause(getInfo(id))
+    end
+
+    if t == "onResume" and globalOptionsCache[id] and globalOptionsCache[id].onPlayResume then
+        globalOptionsCache[id].onPlayResume(getInfo(id))
+    end
+
+    if t == "liveTimestamp" and globalOptionsCache[id] and globalOptionsCache[id].onTimestamp then
+        globalOptionsCache[id].onTimestamp(data.time)
+    end
 
     if cb then cb('ok') end
 end)
@@ -68,6 +84,8 @@ local function handleStateSound(state, data)
     elseif state == "resume" and soundExists(id) then Resume(id)
     elseif state == "volume" and soundExists(id) then
         if isDynamic(id) then setVolumeMax(id, data.volume) else setVolume(id, data.volume) end
+    elseif state == "loop" and soundExists(id) then setSoundLoop(id, data.loop)
+    elseif state == "repeat" and soundExists(id) then repeatSound(id)
     end
 end
 

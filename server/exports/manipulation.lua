@@ -42,3 +42,13 @@ function destroyOnFinish(source, id, bool)
     TriggerClientEvent("olisound:stateSound", source, "destroyOnFinish", { soundId = id, value = bool })
 end
 exports('destroyOnFinish', destroyOnFinish)
+
+function setSoundLoop(source, name_, bool)
+    TriggerClientEvent("olisound:stateSound", source, "loop", { soundId = name_, loop = bool })
+end
+exports('setSoundLoop', setSoundLoop)
+
+function repeatSound(source, name_)
+    TriggerClientEvent("olisound:stateSound", source, "repeat", { soundId = name_ })
+end
+exports('repeatSound', repeatSound)

@@ -50,3 +50,9 @@ function setPlaybackRate(name, rate)
     SendNUIMessage({ status = "playbackRate", name = name, rate = rate })
 end
 exports('setPlaybackRate', setPlaybackRate)
+
+function setReverb(name, amount)
+    if not soundExists(name) then return end
+    SendNUIMessage({ status = "reverb", name = name, amount = amount })
+end
+exports('setReverb', setReverb)

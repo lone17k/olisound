@@ -87,8 +87,37 @@ class SoundInstance {
 
         this.filterNode.connect(this.distortionNode);
         this.distortionNode.connect(this.pannerNode);
-        this.pannerNode.connect(this.gainNode);
-        this.gainNode.connect(this.ctx.destination);
+        
+        // Reverb graph: Panner -> dryGain -> GainNode
+        //                       -> convolverNode -> wetGain -> GainNode
+        this.convolverNode = this.ctx.createConvolver();
+        const length = this.ctx.sampleRate * 2;
+        const impulse = this.ctx.createBuffer(2, length, this.ctx.sampleRate);
+        for (let i = 0; i < 2; i++) {
+            const channel = impulse.getChannelData(i);
+            for (let j = 0; j < length; j++) {
+                channel[j] = (Math.random() * 2 - 1) * Math.pow(1 - j / length, 2);
+            }
+        }
+        this.convolverNode.buffer = impulse;
+        
+        this.dryGain = this.ctx.createGain();
+        this.wetGain = this.ctx.createGain();
+        this.dryGain.gain.value = 1;
+        this.wetGain.gain.value = 0;
+        
+        this.pannerNode.connect(this.dryGain);
+        this.pannerNode.connect(this.convolverNode);
+        this.convolverNode.connect(this.wetGain);
+        
+        this.dryGain.connect(this.gainNode);
+        this.wetGain.connect(this.gainNode);
+        
+        if (!soundManager.masterGain) {
+            soundManager.masterGain = this.ctx.createGain();
+            soundManager.masterGain.connect(this.ctx.destination);
+        }
+        this.gainNode.connect(soundManager.masterGain);
 
         this.audio = null;
         this.sourceNode = null;
@@ -146,7 +175,10 @@ class SoundInstance {
             }
         });
 
-        this.audio.addEventListener('error', () => {});
+        this.audio.addEventListener('error', () => {
+            if (this.destroyed) return;
+            this._post('events', { type: 'onError', id: this.name });
+        });
 
         this.audio.src = this.url;
         this.sourceNode = this.ctx.createMediaElementSource(this.audio);
@@ -213,6 +245,10 @@ class SoundInstance {
                             }
                         }
                     },
+                    onError: (e) => {
+                        if (this.destroyed) return;
+                        this._post('events', { type: 'onError', id: this.name });
+                    }
                 },
             });
         };
@@ -254,6 +290,7 @@ class SoundInstance {
         }
         this.playing = false;
         this.paused = true;
+        this._post('events', { type: 'onPause', id: this.name });
     }
 
     resume() {
@@ -265,6 +302,7 @@ class SoundInstance {
         }
         this.playing = true;
         this.paused = false;
+        this._post('events', { type: 'onResume', id: this.name });
     }
 
     destroy() {
@@ -290,6 +328,9 @@ class SoundInstance {
         try { this.distortionNode?.disconnect(); } catch (e) {}
         try { this.pannerNode?.disconnect(); } catch (e) {}
         try { this.gainNode?.disconnect(); } catch (e) {}
+        try { this.convolverNode?.disconnect(); } catch (e) {}
+        try { this.dryGain?.disconnect(); } catch (e) {}
+        try { this.wetGain?.disconnect(); } catch (e) {}
         this.audio = null;
         this.sourceNode = null;
     }
@@ -521,6 +562,15 @@ class SoundInstance {
         }
     }
 
+    // ── Effects: Reverb ──
+
+    setReverb(amount) {
+        if (this.destroyed) return;
+        const wet = Math.max(0, Math.min(1, amount));
+        this.wetGain.gain.value = wet;
+        this.dryGain.gain.value = 1 - wet;
+    }
+
     // ── Effects: Distortion ──
 
     setDistortion(amount) {
@@ -580,6 +630,11 @@ const soundManager = {
         this.refreshTime = refreshTime || 200;
         if (this.volumeTimer) clearInterval(this.volumeTimer);
         this.volumeTimer = setInterval(() => this.updateDynamicVolumes(), this.refreshTime);
+        const ctx = getAudioContext();
+        if (!this.masterGain) {
+            this.masterGain = ctx.createGain();
+            this.masterGain.connect(ctx.destination);
+        }
     },
 
     get(name) { return this.sounds[name] || null; },
@@ -665,6 +720,12 @@ const soundManager = {
             if (s && s.attachedToVehicle && !s.destroyed) s.setMuffled(enabled, frequency);
         }
     },
+
+    setMasterVolume(vol) {
+        if (this.masterGain) {
+            this.masterGain.gain.value = Math.max(0, Math.min(1, vol));
+        }
+    }
 };
 
 
@@ -803,6 +864,26 @@ window.addEventListener('message', function (event) {
 
         case 'unmuteAll':
             soundManager.unmuteAll();
+            break;
+
+        case 'reverb':
+            s = soundManager.get(d.name);
+            if (s) s.setReverb(d.amount);
+            break;
+
+        case 'masterVolume':
+            soundManager.setMasterVolume(d.volume);
+            break;
+            
+        case 'getTimestamp':
+            s = soundManager.get(d.name);
+            if (s) {
+                fetch(`https://olisound/events`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: 'liveTimestamp', id: d.name, time: s.getTimeStamp() })
+                }).catch(() => {});
+            }
             break;
     }
 });

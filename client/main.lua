@@ -139,6 +139,11 @@ local function ToggleStreamerMode(state)
         SendNUIMessage({ status = "muteAll" })
         TriggerEvent("chat:addMessage", { args = { "olisound", Config.Messages["streamer_on"] } })
     else
+        for k, v in pairs(soundInfo) do
+            if v.playing then
+                PlayMusicFromCache(v)
+            end
+        end
         TriggerEvent("chat:addMessage", { args = { "olisound", Config.Messages["streamer_off"] } })
     end
 end

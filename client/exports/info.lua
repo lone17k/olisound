@@ -64,6 +64,12 @@ function getTimeStamp(name_)
 end
 exports('getTimeStamp', getTimeStamp)
 
+function getLiveTimestamp(name_)
+    if not soundExists(name_) then return -1 end
+    SendNUIMessage({ status = "getTimestamp", name = name_ })
+end
+exports('getLiveTimestamp', getLiveTimestamp)
+
 function getMaxDuration(name_)
     if not soundInfo[name_] then return -1 end
     return soundInfo[name_].maxDuration or -1
@@ -96,3 +102,9 @@ function getVehicleEntity(name_)
     return soundInfo[name_].vehicleEntity
 end
 exports('getVehicleEntity', getVehicleEntity)
+
+function getEntity(name_)
+    if not soundInfo[name_] then return nil end
+    return soundInfo[name_].attachedEntity or soundInfo[name_].vehicleEntity
+end
+exports('getEntity', getEntity)

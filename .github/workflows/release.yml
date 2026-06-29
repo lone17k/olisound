@@ -1,0 +1,60 @@
+name: Release olisound
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'fxmanifest.lua'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Extract Version
+        id: version
+        run: |
+          VERSION=$(grep -E "^version\s+['\"].+['\"]" fxmanifest.lua | awk -F "['\"]" '{print $2}')
+          echo "Extracted version: $VERSION"
+          if [ -z "$VERSION" ]; then
+            echo "Failed to extract version from fxmanifest.lua"
+            exit 1
+          fi
+          echo "version=v$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Check if Release Exists
+        id: check_release
+        run: |
+          if gh release view "${{ steps.version.outputs.version }}" &> /dev/null; then
+            echo "Release ${{ steps.version.outputs.version }} already exists."
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Zip Archive
+        if: steps.check_release.outputs.exists == 'false'
+        run: |
+          mkdir -p olisound
+          rsync -a --exclude='.git' --exclude='.github' --exclude='olisound' --exclude='olisound.zip' . olisound/
+          zip -r olisound.zip olisound/
+          
+      - name: Create Release
+        if: steps.check_release.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: olisound ${{ steps.version.outputs.version }}
+          files: olisound.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

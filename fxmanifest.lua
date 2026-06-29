@@ -3,7 +3,7 @@ games { 'gta5' }
 
 name         'olisound'
 description  'High-performance audio library for FiveM'
-version      '1.0.0'
+version      '1.0.2'
 author       'lonedev'
 
 client_scripts {
@@ -20,6 +20,7 @@ client_scripts {
 
 server_scripts {
     "config.lua",
+    "server/main.lua",
     "server/exports/play.lua",
     "server/exports/manipulation.lua",
 }

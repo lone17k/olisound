@@ -32,3 +32,9 @@ function onPlayStartSilent(name, delegate)
     if not globalOptionsCache[name] then globalOptionsCache[name] = {} end
     globalOptionsCache[name].onPlayStartSilent = delegate
 end
+
+function onTimestamp(name, delegate)
+    if not globalOptionsCache[name] then globalOptionsCache[name] = {} end
+    globalOptionsCache[name].onTimestamp = delegate
+end
+exports('onTimestamp', onTimestamp)

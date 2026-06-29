@@ -14,6 +14,7 @@
 * **3D Positional Audio** — distance-based volume with smooth falloff
 * **Streamer Mode** — mute all external audio with a single command
 * **Streaming Optimization** — auto-destroy/restore sounds beyond hearing range
+* **Automatic Update Checker** — alerts you in the server console when a new version is available
 
 ## 📦 Installation
 
@@ -45,6 +46,9 @@ exports['olisound']:PlayUrlPos(name, url, volume, vector3, loop, options)
 -- Vehicle sound (auto-follows vehicle, muffled when heard from outside)
 exports['olisound']:PlayUrlVehicle(name, url, volume, vehicleEntity, loop, options)
 
+-- Entity sound (auto-follows any ped, object, or prop entity)
+exports['olisound']:PlayUrlEntity(name, url, volume, entity, loop, options)
+
 ```
 
 All play functions accept direct audio URLs **and** YouTube URLs:
@@ -64,6 +68,8 @@ exports['olisound']:PlayUrl('sfx', 'https://example.com/sound.mp3', 1.0)
     onLoading = function(info) end,
     onPlayPause = function(info) end,
     onPlayResume = function(info) end,
+    onError = function(info) end,
+    onTimestamp = function(time) end,
 }
 
 ```
@@ -89,10 +95,15 @@ exports['olisound']:Distance(name, distance)
 exports['olisound']:Destroy(name)
 exports['olisound']:Pause(name)
 exports['olisound']:Resume(name)
+exports['olisound']:DestroyAll()
+exports['olisound']:PauseAll()
+exports['olisound']:ResumeAll()
 exports['olisound']:setVolume(name, volume)            -- 0.0 - 1.0
+exports['olisound']:setMasterVolume(volume)             -- 0.0 - 1.0 (global volume)
 exports['olisound']:setVolumeMax(name, volume)          -- max volume for 3D
 exports['olisound']:setTimeStamp(name, seconds)
 exports['olisound']:setSoundURL(name, url)
+exports['olisound']:crossfadeTo(name, newUrl, timeMs)
 exports['olisound']:repeatSound(name)
 exports['olisound']:destroyOnFinish(name, bool)
 exports['olisound']:setSoundLoop(name, bool)
@@ -113,6 +124,8 @@ exports['olisound']:setVolume(source, name, volume)
 exports['olisound']:setVolumeMax(source, name, volume)
 exports['olisound']:setTimeStamp(source, name, seconds)
 exports['olisound']:destroyOnFinish(source, name, bool)
+exports['olisound']:setSoundLoop(source, name, bool)
+exports['olisound']:repeatSound(source, name)
 
 ```
 
@@ -126,6 +139,7 @@ exports['olisound']:fadeOut(name, timeMs)
 exports['olisound']:setMuffled(name, enabled, frequency)     -- low-pass filter
 exports['olisound']:setDistortion(name, amount)               -- 0.0 - 1.0
 exports['olisound']:setPlaybackRate(name, rate)               -- 0.25 - 4.0
+exports['olisound']:setReverb(name, amount)                   -- 0.0 - 1.0 (wet/dry mix)
 
 ```
 
@@ -142,7 +156,8 @@ exports['olisound']:isDynamic(name)                   -- bool
 exports['olisound']:getDistance(name)                  -- number
 exports['olisound']:getVolume(name)                   -- number (0.0 - 1.0)
 exports['olisound']:getPosition(name)                 -- vector3 or nil
-exports['olisound']:getTimeStamp(name)                -- number (seconds)
+exports['olisound']:getTimeStamp(name)                -- number (seconds, cached)
+exports['olisound']:getLiveTimestamp(name)            -- triggers onTimestamp callback with live JS time
 exports['olisound']:getMaxDuration(name)              -- number (seconds)
 exports['olisound']:getLink(name)                     -- string (url)
 exports['olisound']:getInfo(name)                     -- table
@@ -151,6 +166,7 @@ exports['olisound']:isPlayerInStreamerMode()           -- bool
 exports['olisound']:isPlayerCloseToAnySound()         -- bool
 exports['olisound']:isSoundAttachedToVehicle(name)    -- bool
 exports['olisound']:getVehicleEntity(name)            -- entity handle or nil
+exports['olisound']:getEntity(name)                   -- attached entity handle (ped/object/vehicle)
 
 ```
 

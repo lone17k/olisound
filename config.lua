@@ -3,6 +3,7 @@ Config = {}
 
 Config.RefreshTime = 200
 Config.distanceBeforeUpdatingPos = 40
+Config.defaultDistance = 10           -- Default hearing distance for new sounds
 
 Config.vehicleOcclusionEnabled = true
 Config.occlusionFilterFrequency = 800

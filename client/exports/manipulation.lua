@@ -49,6 +49,21 @@ function Pause(name_)
 end
 exports('Pause', Pause)
 
+function DestroyAll()
+    for name, _ in pairs(soundInfo) do Destroy(name) end
+end
+exports('DestroyAll', DestroyAll)
+
+function PauseAll()
+    for name, _ in pairs(soundInfo) do Pause(name) end
+end
+exports('PauseAll', PauseAll)
+
+function ResumeAll()
+    for name, _ in pairs(soundInfo) do Resume(name) end
+end
+exports('ResumeAll', ResumeAll)
+
 function setVolume(name_, vol)
     if not soundExists(name_) then return end
     SendNUIMessage({ status = "volume", volume = vol, name = name_ })
@@ -109,3 +124,21 @@ function attachSoundToVehicle(name_, attached)
     SendNUIMessage({ status = "attachVehicle", name = name_, attached = attached })
 end
 exports('attachSoundToVehicle', attachSoundToVehicle)
+
+function crossfadeTo(name_, newUrl, durationMs)
+    if not soundExists(name_) then return end
+    local prevVolume = soundInfo[name_].volume
+    exports['olisound']:fadeOut(name_, durationMs)
+    SetTimeout(durationMs + 100, function()
+        if soundExists(name_) then
+            setSoundURL(name_, newUrl)
+            exports['olisound']:fadeIn(name_, durationMs, prevVolume)
+        end
+    end)
+end
+exports('crossfadeTo', crossfadeTo)
+
+function setMasterVolume(vol)
+    SendNUIMessage({ status = "masterVolume", volume = vol })
+end
+exports('setMasterVolume', setMasterVolume)
