@@ -57,6 +57,7 @@ class SoundInstance {
         this.isYoutube = false;
         this.ytPlayer = null;
         this.ytReady = false;
+        this.ytPendingSeek = null;
         this.ytDivId = 'yt_' + instanceCounter++;
         this.ytPollTimer = null;
 
@@ -180,6 +181,10 @@ class SoundInstance {
                         e.target.unMute();
                         e.target.setVolume(0);
                         e.target.playVideo();
+                        if (this.ytPendingSeek !== null) {
+                            e.target.seekTo(this.ytPendingSeek, true);
+                            this.ytPendingSeek = null;
+                        }
 
                         const dur = e.target.getDuration();
                         if (dur > 0) {
@@ -362,8 +367,13 @@ class SoundInstance {
     // ── Timestamp ──
 
     setTimeStamp(time) {
-        if (this.isYoutube && this.ytReady && this.ytPlayer) {
-            this.ytPlayer.seekTo(time, true);
+        if (this.isYoutube) {
+            if (this.ytReady && this.ytPlayer) {
+                this.ytPlayer.seekTo(time, true);
+            } else {
+                // Player not ready yet (e.g. seek right after PlayUrl) — apply once onReady fires
+                this.ytPendingSeek = time;
+            }
         } else if (this.audio) {
             try { this.audio.currentTime = time; } catch (e) {}
         }
