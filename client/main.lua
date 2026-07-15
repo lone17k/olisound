@@ -125,11 +125,22 @@ CreateThread(function()
     end
 end)
 
-local function ToggleStreamerMode(state)
+local function ToggleStreamerMode(state, isFromEvent)
+    local targetState
     if state ~= nil then
-        disableMusic = state
+        targetState = state
     else
-        disableMusic = not disableMusic
+        targetState = not disableMusic
+    end
+
+    if disableMusic == targetState then
+        return
+    end
+
+    disableMusic = targetState
+
+    if not isFromEvent then
+        TriggerEvent("xsound:streamerMode", disableMusic)
     end
 
     if disableMusic then
@@ -159,5 +170,5 @@ exports('streamerMode', ToggleStreamerMode)
 
 RegisterNetEvent('xsound:streamerMode')
 AddEventHandler('xsound:streamerMode', function(status)
-    ToggleStreamerMode(status)
+    ToggleStreamerMode(status, true)
 end)

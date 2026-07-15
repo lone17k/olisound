@@ -3,7 +3,7 @@ games { 'gta5' }
 
 name         'olisound'
 description  'High-performance audio library for FiveM'
-version      '1.0.2'
+version      '1.0.3'
 author       'lonedev'
 
 client_scripts {
