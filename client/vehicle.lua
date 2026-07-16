@@ -10,22 +10,13 @@ local function isSameVehicle(veh1, veh2)
     return false
 end
 
-local function isDoorOpen(vehicle)
+local function isAudioUnmuffled(vehicle)
     if not DoesEntityExist(vehicle) then return false end
     local count = GetNumberOfVehicleDoors(vehicle)
     if count > 4 then count = 4 end
     for i = 0, count - 1 do
         if GetVehicleDoorAngleRatio(vehicle, i) > 0.1 then return true end
         if IsVehicleDoorDamaged(vehicle, i) then return true end
-    end
-    return false
-end
-
-local function isWindowBroken(vehicle)
-    if not DoesEntityExist(vehicle) then return false end
-    local count = GetNumberOfVehicleDoors(vehicle)
-    if count > 4 then count = 4 end
-    for i = 0, count - 1 do
         if not IsVehicleWindowIntact(vehicle, i) then return true end
     end
     return false
@@ -55,22 +46,42 @@ CreateThread(function()
             if not info.playing then goto continue end
             if not info.attachedToVehicle then goto continue end
 
+            local muffleEnabled = true
+            local vehicleGain = Config.outsideVehicleVolume or 0.5
+            local disablePanning = false
+            local muffleFreq = Config.outsideVehicleMuffleFrequency
+
             if isInVehicle and currentVehicle and info.vehicleEntity then
                 if isSameVehicle(info.vehicleEntity, currentVehicle) then
-                    SendNUIMessage({ status = "muffle", name = name, enabled = false })
-                    SendNUIMessage({ status = "vehicleGain", name = name, gain = Config.insideVehicleVolume or 1.0 })
-                    SendNUIMessage({ status = "disablePanning", name = name, disabled = true })
+                    muffleEnabled = false
+                    vehicleGain = Config.insideVehicleVolume or 1.0
+                    disablePanning = true
                 else
-                    SendNUIMessage({ status = "muffle", name = name, enabled = true, frequency = Config.occlusionFilterFrequency })
-                    SendNUIMessage({ status = "vehicleGain", name = name, gain = Config.otherVehicleVolume or 0.4 })
-                    SendNUIMessage({ status = "disablePanning", name = name, disabled = false })
+                    local unmuffled = isAudioUnmuffled(info.vehicleEntity)
+                    muffleEnabled = not unmuffled
+                    vehicleGain = Config.otherVehicleVolume or 0.4
+                    muffleFreq = Config.occlusionFilterFrequency
                 end
             elseif not isInVehicle then
-                -- Always muffle when outside to ensure consistency and prevent "missing muffle" bugs 
-                -- caused by windows rolling down or doors left slightly ajar.
-                SendNUIMessage({ status = "muffle", name = name, enabled = true, frequency = Config.outsideVehicleMuffleFrequency })
-                SendNUIMessage({ status = "vehicleGain", name = name, gain = Config.outsideVehicleVolume or 0.5 })
-                SendNUIMessage({ status = "disablePanning", name = name, disabled = false })
+                local unmuffled = isAudioUnmuffled(info.vehicleEntity)
+                muffleEnabled = not unmuffled
+                vehicleGain = Config.outsideVehicleVolume or 0.5
+                muffleFreq = Config.outsideVehicleMuffleFrequency
+            end
+
+            if info.lastMuffleEnabled ~= muffleEnabled then
+                info.lastMuffleEnabled = muffleEnabled
+                SendNUIMessage({ status = "muffle", name = name, enabled = muffleEnabled, frequency = muffleFreq })
+            end
+            
+            if info.lastVehicleGain ~= vehicleGain then
+                info.lastVehicleGain = vehicleGain
+                SendNUIMessage({ status = "vehicleGain", name = name, gain = vehicleGain })
+            end
+            
+            if info.lastDisablePanning ~= disablePanning then
+                info.lastDisablePanning = disablePanning
+                SendNUIMessage({ status = "disablePanning", name = name, disabled = disablePanning })
             end
 
             ::continue::
@@ -82,14 +93,26 @@ CreateThread(function()
     while true do
         Wait(Config.RefreshTime)
         for name, info in pairs(soundInfo) do
-            if info.vehicleEntity and DoesEntityExist(info.vehicleEntity) and info.playing then
-                local pos = GetEntityCoords(info.vehicleEntity)
-                info.position = pos
-                SendNUIMessage({ status = "soundPosition", name = name, x = pos.x, y = pos.y, z = pos.z })
-            elseif info.attachedEntity and DoesEntityExist(info.attachedEntity) and info.playing then
-                local pos = GetEntityCoords(info.attachedEntity)
-                info.position = pos
-                SendNUIMessage({ status = "soundPosition", name = name, x = pos.x, y = pos.y, z = pos.z })
+            if info.vehicleEntity then
+                if DoesEntityExist(info.vehicleEntity) then
+                    if info.playing then
+                        local pos = GetEntityCoords(info.vehicleEntity)
+                        info.position = pos
+                        SendNUIMessage({ status = "soundPosition", name = name, x = pos.x, y = pos.y, z = pos.z })
+                    end
+                else
+                    Destroy(name)
+                end
+            elseif info.attachedEntity then
+                if DoesEntityExist(info.attachedEntity) then
+                    if info.playing then
+                        local pos = GetEntityCoords(info.attachedEntity)
+                        info.position = pos
+                        SendNUIMessage({ status = "soundPosition", name = name, x = pos.x, y = pos.y, z = pos.z })
+                    end
+                else
+                    Destroy(name)
+                end
             end
         end
     end

@@ -9,6 +9,10 @@ Config.vehicleOcclusionEnabled = true
 Config.occlusionFilterFrequency = 800
 Config.outsideVehicleMuffleFrequency = 600
 
+Config.objectOcclusionEnabled = true
+Config.objectOcclusionFrequency = 800
+Config.debugOcclusion = false                -- Enables the /debugocclusion command
+
 -- Volume Modifiers (1.0 = 100%, 0.5 = 50%)
 Config.insideVehicleVolume = 1.0     -- Volume when you are inside the vehicle playing the music
 Config.otherVehicleVolume = 0.4      -- Volume of other vehicles' music when you are also inside a vehicle

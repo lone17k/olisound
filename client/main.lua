@@ -172,3 +172,135 @@ RegisterNetEvent('xsound:streamerMode')
 AddEventHandler('xsound:streamerMode', function(status)
     ToggleStreamerMode(status, true)
 end)
+
+CreateThread(function()
+    if not Config.objectOcclusionEnabled then return end
+    
+    while true do
+        Wait(250)
+        local hasPlayingSounds = false
+        for _, v in pairs(soundInfo) do
+            if v.playing and not v.attachedToVehicle then
+                hasPlayingSounds = true
+                break
+            end
+        end
+
+        if hasPlayingSounds then
+            local ped = PlayerPedId()
+            local headPos = GetPedBoneCoords(ped, 31086, 0.0, 0.0, 0.0)
+            
+            for k, v in pairs(soundInfo) do
+                if not v.playing then goto continue end
+                if v.attachedToVehicle then goto continue end
+                
+                local targetPos = nil
+                if v.attachedEntity and DoesEntityExist(v.attachedEntity) then
+                    targetPos = GetEntityCoords(v.attachedEntity)
+                elseif v.position then
+                    targetPos = v.position
+                end
+                
+                if targetPos then
+                    local dist = #(headPos - targetPos)
+                    if dist < (v.distance or Config.defaultDistance or 10.0) then
+                        local rayHandle = StartShapeTestRay(headPos.x, headPos.y, headPos.z, targetPos.x, targetPos.y, targetPos.z, 17, ped, 0)
+                        local _, hit, _, _, entityHit = GetShapeTestResult(rayHandle)
+                        
+                        local occluded = false
+                        if hit == 1 then
+                            if v.attachedEntity and entityHit == v.attachedEntity then
+                                occluded = false
+                            else
+                                occluded = true
+                            end
+                        end
+                        
+                        if v.lastObjectMuffleEnabled ~= occluded then
+                            v.lastObjectMuffleEnabled = occluded
+                            SendNUIMessage({ status = "muffle", name = k, enabled = occluded, frequency = Config.objectOcclusionFrequency or 800 })
+                            SendNUIMessage({ status = "vehicleGain", name = k, gain = occluded and (Config.otherVehicleVolume or 0.4) or 1.0 })
+                        end
+                    else
+                        if v.lastObjectMuffleEnabled ~= false then
+                            v.lastObjectMuffleEnabled = false
+                            SendNUIMessage({ status = "muffle", name = k, enabled = false })
+                            SendNUIMessage({ status = "vehicleGain", name = k, gain = 1.0 })
+                        end
+                    end
+                else
+                    if v.lastObjectMuffleEnabled ~= false then
+                        v.lastObjectMuffleEnabled = false
+                        SendNUIMessage({ status = "muffle", name = k, enabled = false })
+                        SendNUIMessage({ status = "vehicleGain", name = k, gain = 1.0 })
+                    end
+                end
+                
+                ::continue::
+            end
+        end
+    end
+end)
+
+if Config.debugOcclusion then
+    local debugOcclusion = false
+    local debugProp = nil
+
+    RegisterCommand("debugocclusion", function()
+        debugOcclusion = not debugOcclusion
+        TriggerEvent("chat:addMessage", { args = { "olisound", "Object Occlusion Debug: " .. tostring(debugOcclusion) } })
+        
+        if debugOcclusion then
+            -- Spawn debug prop and play music
+            local model = GetHashKey("prop_boombox_01")
+            RequestModel(model)
+            while not HasModelLoaded(model) do Wait(0) end
+            
+            local ped = PlayerPedId()
+            local pos = GetOffsetFromEntityInWorldCoords(ped, 0.0, 2.0, 0.0)
+            debugProp = CreateObject(model, pos.x, pos.y, pos.z, true, true, false)
+            PlaceObjectOnGroundProperly(debugProp)
+            
+            exports.olisound:PlayUrlEntity('debug_sound', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 1.0, debugProp, true)
+            
+            CreateThread(function()
+                while debugOcclusion do
+                    Wait(0)
+                    local currentPed = PlayerPedId()
+                    local headPos = GetPedBoneCoords(currentPed, 31086, 0.0, 0.0, 0.0)
+                    
+                    for k, v in pairs(soundInfo) do
+                        if v.playing and not v.attachedToVehicle then
+                            local targetPos = nil
+                            if v.attachedEntity and DoesEntityExist(v.attachedEntity) then
+                                targetPos = GetEntityCoords(v.attachedEntity)
+                            elseif v.position then
+                                targetPos = v.position
+                            end
+                            
+                            if targetPos then
+                                local dist = #(headPos - targetPos)
+                                if dist < (v.distance or Config.defaultDistance or 10.0) then
+                                    if v.lastObjectMuffleEnabled then
+                                        -- Occluded: Red line
+                                        DrawLine(headPos.x, headPos.y, headPos.z, targetPos.x, targetPos.y, targetPos.z, 255, 0, 0, 255)
+                                    else
+                                        -- Clear: Green line
+                                        DrawLine(headPos.x, headPos.y, headPos.z, targetPos.x, targetPos.y, targetPos.z, 0, 255, 0, 255)
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end)
+        else
+            -- Clean up
+            exports.olisound:Destroy('debug_sound')
+            if debugProp and DoesEntityExist(debugProp) then
+                DeleteEntity(debugProp)
+                debugProp = nil
+            end
+        end
+    end, false)
+end

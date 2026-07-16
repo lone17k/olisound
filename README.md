@@ -7,7 +7,9 @@
 * **Web Audio API** — native browser audio, lower latency than HTML5 Audio libraries
 * **YouTube Support** — auto-detects YouTube URLs and plays via IFrame API
 * **Minimal dependencies** — only the YouTube IFrame API, no jQuery or Howler.js
-* **Vehicle Occlusion** — realistic muffling based on door state and window integrity
+* **Vehicle Occlusion** — dynamic muffling based on real-time door open/close states and broken window integrity
+* **Object Occlusion** — raycast-based line-of-sight occlusion for entities (props, boomboxes) with volume attenuation
+* **Entity Cleanup** — auto-destroys sounds when their attached vehicle or entity despawns
 * **PlayUrlVehicle** — attach sounds to vehicles with automatic position tracking
 * **Audio Effects** — fade in/out, distortion, playback rate, low-pass muffle
 * **Non-blocking Fades** — gain scheduling instead of thread-blocking loops
@@ -196,10 +198,12 @@ exports['olisound']:onPlayResume(name, function(info) end)
 | Listener Position | Doors & Windows | Audio | Directional Panning |
 | --- | --- | --- | --- |
 | Inside the same vehicle | Any state | **Clear (100% volume)** | Disabled (Centered Stereo) |
-| Outside the vehicle | Any state | **Muffled (50% volume)** | Enabled (True 3D Audio) |
-| Inside a different vehicle | Any state | **Double muffled (40% volume)**| Enabled (True 3D Audio) |
+| Outside the vehicle | All closed & intact | **Muffled (50% volume)** | Enabled (True 3D Audio) |
+| Outside the vehicle | Door open or window broken | **Clear (100% volume)** | Enabled (True 3D Audio) |
+| Inside a different vehicle | Closed/Intact (Target Veh) | **Double muffled (40% volume)**| Enabled (True 3D Audio) |
+| Inside a different vehicle | Open/Broken (Target Veh) | **Clear (100% volume)** | Enabled (True 3D Audio) |
 
-> Note: Directional panning is disabled when inside the vehicle to prevent intense left-right panning while driving and moving the camera. Muffling is strictly enforced when outside a vehicle to prevent glitches with broken/ajar doors.
+> Note: Directional panning is disabled when inside the vehicle to prevent intense left-right panning while driving and moving the camera. Sounds automatically unmuffle if a door opens or a window is shattered. Sounds are also auto-deleted if the vehicle or entity despawns.
 
 ### Usage
 
@@ -220,6 +224,9 @@ exports['olisound']:Distance('car_radio', 25)
 Config.vehicleOcclusionEnabled = true
 Config.occlusionFilterFrequency = 800       -- muffle for sounds heard from inside car
 Config.outsideVehicleMuffleFrequency = 600  -- muffle for car sounds heard from outside
+
+Config.objectOcclusionEnabled = true        -- line-of-sight occlusion for props/entities
+Config.objectOcclusionFrequency = 800
 
 -- Volume Modifiers (1.0 = 100%, 0.5 = 50%)
 Config.insideVehicleVolume = 1.0     -- Volume when you are inside the vehicle playing the music
@@ -261,6 +268,7 @@ exports['olisound']:setMuffled('sound', true, 600)
 | Command | Description |
 | --- | --- |
 | `/[streamermode]` | Toggle streamer mode (mutes all external audio). Configurable in `config.lua` |
+| `/debugocclusion` | Spawns a boombox and draws real-time line-of-sight occlusion raycasts. |
 
 *Note: If `xsound` streamer mode is activated via export or event, `olisound` will automatically sync and mute its audio as well.*
 
