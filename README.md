@@ -15,6 +15,7 @@
 * **Non-blocking Fades** — gain scheduling instead of thread-blocking loops
 * **3D Positional Audio** — distance-based volume with smooth falloff
 * **Streamer Mode** — mute all external audio with a single command
+* **Audio Analysis** — opt-in level, bass, 5 frequency bands, beat detection and BPM per sound (YouTube too)
 * **Streaming Optimization** — auto-destroy/restore sounds beyond hearing range
 * **Automatic Update Checker** — alerts you in the server console when a new version is available
 
@@ -174,6 +175,40 @@ exports['olisound']:getEntity(name)                   -- attached entity handle 
 
 ---
 
+### Audio Analysis (level / bass / bands / beat / BPM)
+
+Opt-in per sound. Taps the raw source before muffle, panning and volume, so the
+values describe the music itself, whatever the listener's distance. Works for direct
+audio URLs (mp3/ogg/radio streams) **and YouTube**: the `<video>` inside the YouTube
+iframe is routed into Web Audio (FiveM's CEF allows reading the iframe DOM). As a
+bonus, YouTube then gets the same low-pass/muffle, reverb and 3D panning as direct URLs.
+If the iframe DOM is ever unreachable, YouTube falls back to plain `setVolume()`,
+`getAnalysis(name).supported` is `false` and the level getters return `nil`.
+
+```lua
+exports['olisound']:enableAnalysis(name)            -- stays on for this name (re-plays too)
+exports['olisound']:disableAnalysis(name)
+
+local level, bass = exports['olisound']:getAudioLevel(name)  -- 0..1 each, nil = no data
+local bands = exports['olisound']:getAudioBands(name)
+-- { sub, bass, lowmid, high, air, level } each 0..1 (auto-gained per band), nil = no data
+local bpm, confidence = exports['olisound']:getBPM(name)     -- bpm 0 until ~4-6 s of music
+-- BPM is reported in the 90–180 range (slower/faster material at half/double tempo);
+-- tempo changes inside a continuous mix are followed in ~4–5 s.
+local a = exports['olisound']:getAnalysis(name)
+-- { supported, level, bass, bands, bpm, confidence, beatCount, lastBeat (GetGameTimer), updatedAt }
+
+exports['olisound']:onBeat(name, function(info)
+    -- info = { name, bpm, confidence, strength, level, bass, beatCount }
+end)
+
+-- or, without exports:
+AddEventHandler('olisound:beat', function(name, info) end)
+```
+
+Cost: one 2048-point FFT every 20 ms per analysed sound in the NUI; updates reach Lua
+at 10 Hz plus one message per detected beat.
+
 ### Events
 
 ```lua
@@ -292,7 +327,8 @@ olisound/
 │       ├── play.lua
 │       ├── manipulation.lua
 │       ├── events.lua
-│       └── effects.lua
+│       ├── effects.lua
+│       └── analysis.lua
 └── server/
     └── exports/
         ├── play.lua

@@ -7,6 +7,8 @@ let audioCtx = null;
 let ytApiReady = false;
 let ytReadyQueue = [];
 let instanceCounter = 0;
+// A media element can only ever get ONE MediaElementSource — cache it.
+const mediaSources = new WeakMap();
 
 function getAudioContext() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -60,6 +62,8 @@ class SoundInstance {
         this.ytPendingSeek = null;
         this.ytDivId = 'yt_' + instanceCounter++;
         this.ytPollTimer = null;
+        this.ytMediaEl = null;      // <video> inside the YT iframe once hooked
+        this.ytHooked = false;      // YT audio routed through Web Audio
 
         this.ctx = getAudioContext();
         this._buildAudioGraph();
@@ -67,6 +71,9 @@ class SoundInstance {
     }
 
     _buildAudioGraph() {
+        // Every source (Audio element / hooked YT video) enters here; analysis taps it.
+        this.inputNode = this.ctx.createGain();
+
         this.filterNode = this.ctx.createBiquadFilter();
         this.filterNode.type = 'lowpass';
         this.filterNode.frequency.value = 22050;
@@ -85,6 +92,7 @@ class SoundInstance {
         this.gainNode = this.ctx.createGain();
         this.gainNode.gain.value = this.dynamic ? 0 : this.volume;
 
+        this.inputNode.connect(this.filterNode);
         this.filterNode.connect(this.distortionNode);
         this.distortionNode.connect(this.pannerNode);
         
@@ -182,7 +190,7 @@ class SoundInstance {
 
         this.audio.src = this.url;
         this.sourceNode = this.ctx.createMediaElementSource(this.audio);
-        this.sourceNode.connect(this.filterNode);
+        this.sourceNode.connect(this.inputNode);
         this.audio.load();
     }
 
@@ -233,6 +241,7 @@ class SoundInstance {
                         this.ytPollTimer = setInterval(() => this._ytPollState(), 500);
                     },
                     onStateChange: (e) => {
+                        if (e.data === YT.PlayerState.PLAYING || e.data === YT.PlayerState.BUFFERING) this._ytTryHook();
                         if (e.data === YT.PlayerState.ENDED) {
                             if (this.loop) {
                                 this.ytPlayer.seekTo(0);
@@ -259,12 +268,51 @@ class SoundInstance {
 
     _ytPollState() {
         if (this.destroyed || !this.ytReady) return;
+        this._ytTryHook();
         this._ytApplyVolume();
+    }
+
+    // Same trick as criticalscripts cs-boombox/cs-hall: FiveM's CEF lets us read
+    // the YT iframe's DOM, so its <video> can be fed into our Web Audio graph
+    // (real panning/filters + FFT analysis). If the DOM is unreachable we keep
+    // the old setVolume() path.
+    _ytTryHook() {
+        if (this.destroyed || !this.ytPlayer || this.ytHookFailed) return false;
+        let doc = null;
+        try { doc = this.ytPlayer.getIframe().contentDocument; } catch (e) { doc = null; }
+        if (!doc) {
+            if (!this._ytHookWarned) { this._ytHookWarned = true; console.log('[olisound] YT iframe DOM not reachable — analysis disabled for ' + this.name); }
+            this.ytHookFailed = true;
+            return false;
+        }
+        const v = doc.querySelector('video');
+        if (!v) return false;
+        if (v === this.ytMediaEl) return true;
+        try {
+            let src = mediaSources.get(v);
+            if (!src) { src = this.ctx.createMediaElementSource(v); mediaSources.set(v, src); }
+            try { this.sourceNode?.disconnect(); } catch (e) {}
+            src.connect(this.inputNode);
+            this.sourceNode = src;
+            this.ytMediaEl = v;
+            this.ytHooked = true;
+            this._ytApplyVolume();
+            return true;
+        } catch (e) {
+            console.log('[olisound] YT hook failed: ' + e);
+            this.ytHookFailed = true;
+            return false;
+        }
     }
 
     _ytApplyVolume() {
         if (!this.ytReady || !this.ytPlayer) return;
-        const vol = this.dynamic ? 0 : this.volume;
+        if (this.ytHooked) {
+            // Gain/pan/filter now happen in Web Audio; keep the element at full level.
+            if (this.ytPlayer.isMuted && this.ytPlayer.isMuted()) this.ytPlayer.unMute();
+            this.ytPlayer.setVolume(100);
+            return;
+        }
         const gain = this.gainNode.gain.value;
         this.ytPlayer.setVolume(Math.round(gain * 100));
     }
@@ -323,7 +371,9 @@ class SoundInstance {
         }
 
         if (this.audio) { this.audio.pause(); this.audio.removeAttribute('src'); this.audio.load(); }
+        if (typeof OliAnalysis !== 'undefined') OliAnalysis.detach(this.name, this);
         try { this.sourceNode?.disconnect(); } catch (e) {}
+        try { this.inputNode?.disconnect(); } catch (e) {}
         try { this.filterNode?.disconnect(); } catch (e) {}
         try { this.distortionNode?.disconnect(); } catch (e) {}
         try { this.pannerNode?.disconnect(); } catch (e) {}
@@ -365,7 +415,7 @@ class SoundInstance {
         const finalVol = vol * this.vehicleGainMultiplier;
         try { this.gainNode.gain.setTargetAtTime(finalVol, this.ctx.currentTime, 0.03); }
         catch (e) { this.gainNode.gain.value = finalVol; }
-        if (this.isYoutube && this.ytReady && this.ytPlayer) {
+        if (this.isYoutube && this.ytReady && this.ytPlayer && !this.ytHooked) {
             this.ytPlayer.setVolume(Math.round(finalVol * 100));
         }
     }
@@ -458,12 +508,18 @@ class SoundInstance {
                 this.audio.src = this.url;
                 this.audio.load();
                 if (wasPlaying) this.play();
+            } else {
+                this._createAudio();
+                if (wasPlaying) this.play();
             }
         }
     }
 
     _destroyYoutube() {
         if (this.ytPollTimer) { clearInterval(this.ytPollTimer); this.ytPollTimer = null; }
+        try { if (this.ytHooked) this.sourceNode?.disconnect(); } catch (e) {}
+        if (this.ytHooked) this.sourceNode = null;
+        this.ytMediaEl = null; this.ytHooked = false; this.ytHookFailed = false;
         if (this.ytPlayer) {
             try {
                 if (typeof this.ytPlayer.stopVideo === 'function') this.ytPlayer.stopVideo();
@@ -621,6 +677,7 @@ class SoundInstance {
 
 const soundManager = {
     sounds: {},
+    analysisNames: new Set(),   // names that want analysis (survive re-PlayUrl)
     playerPos: [-900000, -900000, -900000],
     isAllMuted: false,
     volumeTimer: null,
@@ -645,6 +702,7 @@ const soundManager = {
         this.sounds[name] = s;
         s.create();
         s.play();
+        if (this.analysisNames.has(name)) OliAnalysis.attach(s);
         return s;
     },
 
@@ -869,6 +927,17 @@ window.addEventListener('message', function (event) {
         case 'reverb':
             s = soundManager.get(d.name);
             if (s) s.setReverb(d.amount);
+            break;
+
+        case 'analysis':
+            if (d.enabled) {
+                soundManager.analysisNames.add(d.name);
+                s = soundManager.get(d.name);
+                if (s) OliAnalysis.attach(s);
+            } else {
+                soundManager.analysisNames.delete(d.name);
+                OliAnalysis.detach(d.name);
+            }
             break;
 
         case 'masterVolume':
