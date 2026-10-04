@@ -16,6 +16,7 @@ client_scripts {
     "client/exports/manipulation.lua",
     "client/exports/events.lua",
     "client/exports/effects.lua",
+    "client/exports/analysis.lua",
 }
 
 server_scripts {
@@ -30,4 +31,5 @@ ui_page "html/index.html"
 files {
     "html/index.html",
     "html/scripts/engine.js",
+    "html/scripts/analysis.js",
 }
